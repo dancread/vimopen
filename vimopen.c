@@ -13,12 +13,14 @@
  */
 #define VIM_EXE "gvim.exe"
 #define VIM_OPTS "--servername vimopen "
-INT main() {
+void SearchRecursively(LPCTSTR lpFolder, LPCTSTR lpFilePattern, void (*FindFileCallBack)(char *));
+void SearchCallBack(char *szFoundFile);
+INT main(int argc, char **argv) {
     CHAR szCommand[MAX_PATH];
     CHAR szInputBuffer[MAX_PATH];
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-    // If piped input, then pipe it to the empty file
+    CHAR szCWD[MAX_PATH];
+    GetCurrentDirectory(MAX_PATH,szCWD);
+    // If piped input, then open those files
     if(GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_PIPE){
       ShellExecute(NULL, "open",VIM_EXE, VIM_OPTS, NULL, SW_SHOWDEFAULT);
       // Read stdin
@@ -33,6 +35,60 @@ INT main() {
       }
       ExitProcess(0);
     }
-    printf("No input detected from standard in.\n");
+    // Else use the argument
+    else{
+      ShellExecute(NULL, "open",VIM_EXE, VIM_OPTS, NULL, SW_SHOWDEFAULT);
+      SearchRecursively(szCWD,argv[1],SearchCallBack);
+      ExitProcess(0);
+    }
     ExitProcess(1);
+}
+void SearchRecursively(LPCTSTR lpFolder, LPCTSTR lpFilePattern, void (*FindFileCallBack)(char *))
+{
+    TCHAR szFullPattern[MAX_PATH];
+    WIN32_FIND_DATA FindFileData;
+    HANDLE hFindFile;
+    // first we are going to process any subdirectories
+    PathCombine(szFullPattern, lpFolder, "*");
+    hFindFile = FindFirstFile(szFullPattern, &FindFileData);
+    if(hFindFile != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+          if(strcmp(FindFileData.cFileName,".") && strcmp(FindFileData.cFileName,"..")){
+            if(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                // found a subdirectory; recurse into it
+                PathCombine(szFullPattern, lpFolder, FindFileData.cFileName);
+                SearchRecursively(szFullPattern, lpFilePattern,FindFileCallBack);
+            }
+          }
+        } while(FindNextFile(hFindFile, &FindFileData));
+        FindClose(hFindFile);
+    }
+
+    // Now we are going to look for the matching files
+    PathCombine(szFullPattern, lpFolder, lpFilePattern);
+    hFindFile = FindFirstFile(szFullPattern, &FindFileData);
+    if(hFindFile != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            if(!(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+            {
+              // found a file; do somethinG with it
+              PathCombine(szFullPattern, lpFolder, FindFileData.cFileName);
+              SearchCallBack(szFullPattern);
+            }
+        } while(FindNextFile(hFindFile, &FindFileData));
+        FindClose(hFindFile);
+    }
+}
+void SearchCallBack(char *szFoundFile){
+  CHAR szCommand[MAX_PATH];
+  printf("Opening: %s\n",szFoundFile);
+  lstrcpyn(szCommand, VIM_OPTS, MAX_PATH);
+  lstrcat(szCommand, "--remote ");
+  lstrcat(szCommand, szFoundFile);
+  ShellExecute(NULL, "open",VIM_EXE, szCommand, NULL, SW_SHOWDEFAULT);
 }
