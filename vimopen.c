@@ -78,6 +78,7 @@ void SearchRecursively(LPCTSTR lpFolder, LPCTSTR lpFilePattern, void (*FindFileC
             {
               // found a file; do somethinG with it
               PathCombine(szFullPattern, lpFolder, FindFileData.cFileName);
+              PathQuoteSpaces(szFullPattern);
               SearchCallBack(szFullPattern);
             }
         } while(FindNextFile(hFindFile, &FindFileData));
